@@ -1,11 +1,11 @@
-package main
+package api
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
+	"time"
 )
 
 const API_URL = "https://8j5baasof2.execute-api.us-west-2.amazonaws.com/production/swechallenge/list"
@@ -40,7 +40,6 @@ func fetchStockData(nextPage string) (*APIResponse, error) {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+API_TOKEN)
-	//req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -67,22 +66,23 @@ func fetchStockData(nextPage string) (*APIResponse, error) {
 	return &data, nil
 }
 
-func main() {
+func DownloadAllStocks() ([]StockItem, error) {
+	var allStocks []StockItem
 	var nextPage string
 	for {
 		result, err := fetchStockData(nextPage)
 		if err != nil {
-			log.Fatalf("Error al obtener datos: %v", err)
+			return nil, fmt.Errorf("error fetching stock data: %w", err)
 		}
 
-		for _, item := range result.Items {
-			fmt.Printf("Ticker: %s, Compañía: %s, Acción: %s por %s\n", item.Ticker, item.Company, item.Action, item.Brokerage)
-		}
+		allStocks = append(allStocks, result.Items...)
 
 		if result.NextPage == "" {
-			break // no hay más páginas
+			break // No hay más páginas
 		}
 
 		nextPage = result.NextPage
+		time.Sleep(1 * time.Second) // Pausa para no sobrecargar la API
 	}
+	return allStocks, nil
 }
