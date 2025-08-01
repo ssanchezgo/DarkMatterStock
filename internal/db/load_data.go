@@ -4,12 +4,12 @@ import (
 	"context"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/DarkMatterStock/internal/api"
+	"dark_matter_stock/internal/api"
 )
 
-// Migrate crea la tabla 'stocks' si no existe.
 func Migrate(ctx context.Context) error {
 	createTableSQL := `
 	CREATE TABLE IF NOT EXISTS stocks (
@@ -19,8 +19,8 @@ func Migrate(ctx context.Context) error {
 		action VARCHAR(255),
 		target_from DECIMAL,
 		target_to DECIMAL,
-		rating_from DECIMAL,
-		rating_to DECIMAL,
+		rating_from VARCHAR(255),
+		rating_to VARCHAR(255),
 		time TIMESTAMP
 	);`
 
@@ -32,7 +32,26 @@ func Migrate(ctx context.Context) error {
 	return nil
 }
 
-// InsertStocks inserta una lista de acciones en la base de datos.
+func cleanAndParseFloatPtr(s string) *float64 {
+
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "$", "")
+	s = strings.ReplaceAll(s, ",", "")
+
+	if s == "" {
+		return nil
+	}
+
+	val, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+
+		log.Printf("Error de parsing para el valor '%s': %v", s, err)
+		return nil
+	}
+
+	return &val
+}
+
 func InsertStocks(ctx context.Context, items []api.StockItem) error {
 	tx, err := Conn.Begin(ctx)
 	if err != nil {
@@ -40,41 +59,22 @@ func InsertStocks(ctx context.Context, items []api.StockItem) error {
 	}
 	defer tx.Rollback(ctx)
 
-	// Prepara la sentencia para la inserción
-	insertStmt, err := tx.Prepare(ctx, "insert_stocks", "UPSERT INTO stocks (ticker, company, brokerage, action, target_from, target_to, rating_from, rating_to, time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
-	if err != nil {
-		return err
-	}
-
 	for _, item := range items {
-		// Conversión de strings a float64, manejando errores de parsing.
-		targetFrom, err := strconv.ParseFloat(item.TargetFrom, 64)
-		if err != nil {
-			targetFrom = 0 // o manejar el error de otra forma, por ejemplo, ignorando el campo
-		}
 
-		targetTo, err := strconv.ParseFloat(item.TargetTo, 64)
-		if err != nil {
-			targetTo = 0
-		}
+		targetFrom := cleanAndParseFloatPtr(item.TargetFrom)
+		targetTo := cleanAndParseFloatPtr(item.TargetTo)
+		ratingFrom := item.RatingFrom
+		ratingTo := item.RatingTo
+		action := item.Action
 
-		ratingFrom, err := strconv.ParseFloat(item.RatingFrom, 64)
-		if err != nil {
-			ratingFrom = 0
-		}
-
-		ratingTo, err := strconv.ParseFloat(item.RatingTo, 64)
-		if err != nil {
-			ratingTo = 0
-		}
-
-		t, err := time.Parse("2006-01-02 15:04:05", item.Time)
+		t, err := time.Parse(time.RFC3339Nano, item.Time)
 		if err != nil {
 			log.Printf("Error al parsear la fecha para %s: %v", item.Ticker, err)
 			continue
 		}
 
-		_, err = tx.Exec(ctx, "insert_stocks", item.Ticker, item.Company, item.Brokerage, item.Action, targetFrom, targetTo, ratingFrom, ratingTo, t)
+		_, err = tx.Exec(ctx, "UPSERT INTO stocks (ticker, company, brokerage, action, target_from, target_to, rating_from, rating_to, time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+			item.Ticker, item.Company, item.Brokerage, action, targetFrom, targetTo, ratingFrom, ratingTo, t)
 		if err != nil {
 			log.Printf("Error al insertar %s: %v", item.Ticker, err)
 			return err
