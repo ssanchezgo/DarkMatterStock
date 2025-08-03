@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"dark_matter_stock/internal/api"
+	"github.com/ssanchezgo/DarkMatterStock/internal/api"
 )
 
 func Migrate(ctx context.Context) error {

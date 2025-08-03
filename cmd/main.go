@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	"dark_matter_stock/internal/db"
-	"dark_matter_stock/internal/server"
+	"github.com/ssanchezgo/DarkMatterStock/internal/db"
+	"github.com/ssanchezgo/DarkMatterStock/internal/server"
 )
 
 func main() {
